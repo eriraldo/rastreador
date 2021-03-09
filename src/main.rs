@@ -387,13 +387,38 @@ fn main() {
 
     let argv: Vec<_> = std::env::args().collect();
     let mut cmd = Command::new(&argv[1]);
-    for arg in &argv{
-        cmd.arg(arg);
-    }
+    //for arg in &argv{
+    //    cmd.arg(arg);
+    //}
     let option1 ="-v";
     let option2 ="-V";
-    
-    
+    let mut flag1 = 0;
+    let mut flag2 = 0;
+    let mut flag0 = 0;
+
+    for argument in &argv[1..]{
+        if argument.as_str() != option1 &&  argument.as_str() != option2 && flag0 == 0
+        {
+            
+            cmd = Command::new(&argument);
+            println!("comando: {}", &argument.as_str());
+            flag0 = 1;
+        }
+        else if argument.as_str() == option1{
+            flag1 = 1;
+            println!("opcion = -v");
+        }
+        else if argument.as_str() == option2{
+            flag2 = 1;
+            println!("opcion = -V");
+        }
+        else{
+            cmd.arg(argument);
+            println!("argumento: {}", &argument.as_str())
+        }
+
+
+    }
     
     
     //println!("se utilizo la opcion: {}",option);
@@ -418,9 +443,11 @@ fn main() {
 
     /// Whether we are exiting (rather than entering) a syscall.
     /// ptrace is stopped both times when exiting and entering a syscall, we only
-    /// need to stop once.  
+    /// need to stop once.
     let mut exit = true;
-    if argv.iter().any(|i| i==option1) {
+
+
+    if flag1==1 {
         println!("\n\n\nSE ESCOGIO LA OPCION -v\n\n\n");
         
        
@@ -440,7 +467,7 @@ fn main() {
                 //El numero de la llamada esta almacenado dentro de orig_rax_register.
                 //Se traduce de numero al nombre del syscall usando un array que guarda las syscalls
                 let mut syscallName = syscallNames[(regs.orig_rax) as usize];
-
+                println!("{}" ,&syscallName);
                 match map.get(&syscallName) {
                     
                     Some(&number) => map.insert(syscallName, number + 1),
@@ -462,7 +489,7 @@ fn main() {
         }
     
     }
-    if argv.iter().any(|i| i==option2) {//se busca en el vector si la opcion es -V
+    else if flag2 ==1  {//se busca en el vector si la opcion es -V
         println!("\n\nSE ESCOGIO LA OPCION -V\n\n");
         
        
@@ -475,14 +502,15 @@ fn main() {
                     break;
                 }
             };
-            //println!("{}{}");
+           
             
-            //pause();
+            
+            pause();
             if exit {
                 //El numero de la llamada esta almacenado dentro de orig_rax_register.
                 //Se traduce de numero al nombre del syscall usando un array que guarda las syscalls
                 let mut syscallName = syscallNames[(regs.orig_rax) as usize];
-
+                println!("{}" ,&syscallName);
                 match map.get(&syscallName) {
                     
                     Some(&number) => map.insert(syscallName, number + 1),
@@ -505,7 +533,45 @@ fn main() {
         }
         
         
+    }
+    else{
+        loop {
+            //se obtienen los registros de donde se detuvo ptrace.
+            let regs = match get_regs(pid) {
+                Ok(x) => x,
+                Err(err ) => {
+                    eprintln!("End of ptrace {:?}", err);
+                    break;
+                }
+            };
+
+            //println!("{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {} ",elapsed.as_secs_f64(),regs.r15, regs.r14,regs.r13, regs.r12,regs.r11, regs.r10,regs.r9,regs.r8,regs.rbp,regs.rbx,regs.rax,regs.rcx,regs.rdx,regs.rsi,regs.rdi);
+
+            if exit {
+                //El numero de la llamada esta almacenado dentro de orig_rax_register.
+                //Se traduce de numero al nombre del syscall usando un array que guarda las syscalls
+                let mut syscallName = syscallNames[(regs.orig_rax) as usize];
+                //println!("{}" ,&syscallName);
+                match map.get(&syscallName) {
+                    
+                    Some(&number) => map.insert(syscallName, number + 1),
+                    _ => map.insert(syscallName, 1),//se agregan las syscalls al HashMap indexadas.
+                };
+            }
+
+            unsafe {
+                ptrace(//se hace el request de la llamada al sistema usando ptrace()
+                    Request::PTRACE_SYSCALL,
+                    pid,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+            }
+
+            waitpid(pid, None);
+            exit = !exit;
         }
+    }
     
     let mut counter : i32 = 0;
 
